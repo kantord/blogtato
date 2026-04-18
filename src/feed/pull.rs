@@ -28,7 +28,7 @@ pub(crate) fn fetch_feeds(sources: &[FeedSource], pb: &ProgressBar) -> Vec<Fetch
             .par_iter()
             .map(|source| {
                 pb.set_message(source.url.clone());
-                let result = crate::feed::fetch(&client, &source.url).map_err(|e| e.to_string());
+                let result = crate::feed::fetch_source(&client, source).map_err(|e| e.to_string());
                 pb.inc(1);
                 (source.clone(), result)
             })

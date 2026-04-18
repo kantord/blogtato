@@ -79,6 +79,36 @@ pub(crate) fn cmd_add(tx: &mut Transaction, url: &str) -> anyhow::Result<()> {
         site_url: String::new(),
         description: String::new(),
         is_fetched: false,
+        command: None,
     });
     Ok(())
+}
+
+pub(crate) fn cmd_add_script(
+    tx: &mut Transaction,
+    name: &str,
+    command: &[String],
+) -> anyhow::Result<String> {
+    anyhow::ensure!(!name.is_empty(), "script feed name cannot be empty");
+    anyhow::ensure!(
+        !name.starts_with("script:"),
+        "script feed name should not include the script: prefix"
+    );
+    anyhow::ensure!(
+        name.chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.')),
+        "script feed name may only contain letters, numbers, dots, dashes, and underscores"
+    );
+    anyhow::ensure!(!command.is_empty(), "script command cannot be empty");
+
+    let url = format!("script:{name}");
+    tx.feeds.upsert(FeedSource {
+        url: url.clone(),
+        title: String::new(),
+        site_url: String::new(),
+        description: String::new(),
+        is_fetched: false,
+        command: Some(command.to_vec()),
+    });
+    Ok(url)
 }

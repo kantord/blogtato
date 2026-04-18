@@ -17,6 +17,8 @@ pub struct FeedSource {
     pub description: String,
     #[serde(default = "default_true")]
     pub is_fetched: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub command: Option<Vec<String>>,
 }
 
 impl TableRow for FeedSource {

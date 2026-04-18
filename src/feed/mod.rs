@@ -3,7 +3,12 @@ pub(crate) mod discover;
 pub(crate) mod pull;
 pub mod rss;
 
+use std::io::Read;
+use std::process::Stdio;
+use std::time::{Duration, Instant};
+
 use crate::data::schema::FeedItem;
+use crate::data::schema::FeedSource;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FeedMeta {
@@ -42,6 +47,93 @@ pub(crate) fn parse(bytes: &[u8]) -> anyhow::Result<(FeedMeta, Vec<FeedItem>)> {
 pub fn fetch(client: &ureq::Agent, url: &str) -> anyhow::Result<(FeedMeta, Vec<FeedItem>)> {
     let bytes = client.get(url).call()?.body_mut().read_to_vec()?;
     parse(&bytes[..])
+}
+
+pub fn fetch_source(
+    client: &ureq::Agent,
+    source: &FeedSource,
+) -> anyhow::Result<(FeedMeta, Vec<FeedItem>)> {
+    if source.url.starts_with("script:") {
+        fetch_script(source)
+    } else {
+        fetch(client, &source.url)
+    }
+}
+
+const SCRIPT_TIMEOUT: Duration = Duration::from_secs(30);
+const SCRIPT_WAIT_POLL_INTERVAL: Duration = Duration::from_millis(50);
+
+fn fetch_script(source: &FeedSource) -> anyhow::Result<(FeedMeta, Vec<FeedItem>)> {
+    let command = source
+        .command
+        .as_ref()
+        .filter(|cmd| !cmd.is_empty())
+        .ok_or_else(|| anyhow::anyhow!("script source {} has no command", source.url))?;
+    let (program, args) = command.split_first().expect("checked non-empty command");
+
+    let mut child = std::process::Command::new(program)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| anyhow::anyhow!("failed to run script {}: {e}", source.url))?;
+
+    let mut stdout = child.stdout.take().expect("stdout was configured as piped");
+    let mut stderr = child.stderr.take().expect("stderr was configured as piped");
+
+    let stdout_reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        stdout.read_to_end(&mut buf).map(|_| buf)
+    });
+    let stderr_reader = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        stderr.read_to_end(&mut buf).map(|_| buf)
+    });
+
+    let deadline = Instant::now() + SCRIPT_TIMEOUT;
+    let status = loop {
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            let _ = stdout_reader.join();
+            let _ = stderr_reader.join();
+            anyhow::bail!(
+                "script source {} timed out after {} seconds",
+                source.url,
+                SCRIPT_TIMEOUT.as_secs()
+            );
+        }
+
+        std::thread::sleep(SCRIPT_WAIT_POLL_INTERVAL);
+    };
+
+    let stdout = stdout_reader
+        .join()
+        .map_err(|_| anyhow::anyhow!("failed to read stdout from script {}", source.url))??;
+    let stderr = stderr_reader
+        .join()
+        .map_err(|_| anyhow::anyhow!("failed to read stderr from script {}", source.url))??;
+
+    if !status.success() {
+        let stderr = String::from_utf8_lossy(&stderr);
+        let detail = stderr.trim();
+        if detail.is_empty() {
+            anyhow::bail!("script source {} failed with status {}", source.url, status);
+        }
+        anyhow::bail!(
+            "script source {} failed with status {}: {}",
+            source.url,
+            status,
+            detail
+        );
+    }
+
+    parse(&stdout[..])
 }
 
 #[cfg(test)]
