@@ -295,7 +295,7 @@ These are mature, self-hostable web-based RSS readers/aggregators. What
 zero-setup sync between different machines using `git`, without the need for an
 additional, continuously running server.
 
-### [Feedly](https://feedly.com/), [Inoreader](https://www.inoreader.com/)
+### [Feedly](https://feedly.com/i/discover/), [Inoreader](https://www.inoreader.com/)
 
 These are full-featured web-based services. If you are a heavy RSS-user and
 like the user interfaces and features they offer (such as GUI apps for iOS and
