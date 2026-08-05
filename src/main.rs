@@ -83,6 +83,9 @@ enum Command {
         /// Repeat to sync only selected feeds by @shorthand
         #[arg(long = "feed", value_name = "SHORTHAND")]
         feeds: Vec<String>,
+        /// Do not interact with the remote repository
+        #[arg(long)]
+        no_remote: bool,
     },
     /// Mark a post as unread
     Unread,
@@ -289,9 +292,12 @@ fn run() -> anyhow::Result<()> {
             commands::import::cmd_import(&mut store, path)?;
         }
 
-        Some(Command::Sync { ref feeds }) => {
+        Some(Command::Sync {
+            ref feeds,
+            no_remote,
+        }) => {
             reject_filter(&filter, "sync")?;
-            commands::sync::cmd_sync(&mut store, feeds)?;
+            commands::sync::cmd_sync(&mut store, feeds, no_remote)?;
         }
         Some(Command::Git { ref args }) => {
             reject_filter(&filter, "git")?;
