@@ -13,7 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 synctato = "=0.1.13"
-anyhow = "=1.0.102"
+anyhow = "=1.0.104"
 atom_syndication = "=0.12.9"
 clap = { version = "=4.6.1", features = ["derive"] }
 chrono = { version = "=0.4.44", features = ["serde"] }
