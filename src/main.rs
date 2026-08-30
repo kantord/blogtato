@@ -83,6 +83,9 @@ enum Command {
         /// Repeat to sync only selected feeds by @shorthand
         #[arg(long = "feed", value_name = "SHORTHAND")]
         feeds: Vec<String>,
+        /// Do not interact with the remote repository
+        #[arg(long)]
+        no_remote: bool,
     },
     /// Mark a post as unread
     Unread,
@@ -289,9 +292,12 @@ fn run() -> anyhow::Result<()> {
             commands::import::cmd_import(&mut store, path)?;
         }
 
-        Some(Command::Sync { ref feeds }) => {
+        Some(Command::Sync {
+            ref feeds,
+            no_remote,
+        }) => {
             reject_filter(&filter, "sync")?;
-            commands::sync::cmd_sync(&mut store, feeds)?;
+            commands::sync::cmd_sync(&mut store, feeds, no_remote)?;
         }
         Some(Command::Git { ref args }) => {
             reject_filter(&filter, "git")?;
@@ -409,27 +415,58 @@ mod tests {
     #[test]
     fn test_parse_sync_without_feed_selectors() {
         let args = Args::parse_from(args(&["blog", "sync"]));
-        let Some(Command::Sync { feeds }) = args.command else {
+        let Some(Command::Sync { feeds, no_remote }) = args.command else {
             panic!("expected sync command");
         };
         assert!(feeds.is_empty());
+        assert_eq!(no_remote, false);
     }
 
     #[test]
     fn test_parse_sync_with_one_feed_selector() {
         let args = Args::parse_from(args(&["blog", "sync", "--feed", "@df"]));
-        let Some(Command::Sync { feeds }) = args.command else {
+        let Some(Command::Sync { feeds, no_remote }) = args.command else {
             panic!("expected sync command");
         };
         assert_eq!(feeds, vec!["@df"]);
+        assert_eq!(no_remote, false);
     }
 
     #[test]
     fn test_parse_sync_with_multiple_feed_selectors() {
         let args = Args::parse_from(args(&["blog", "sync", "--feed", "@df", "--feed", "@dg"]));
-        let Some(Command::Sync { feeds }) = args.command else {
+        let Some(Command::Sync { feeds, no_remote }) = args.command else {
             panic!("expected sync command");
         };
         assert_eq!(feeds, vec!["@df", "@dg"]);
+        assert_eq!(no_remote, false);
+    }
+
+    #[test]
+    fn test_parse_sync_with_no_remote() {
+        let args = Args::parse_from(args(&["blog", "sync", "--no-remote"]));
+        let Some(Command::Sync { feeds, no_remote }) = args.command else {
+            panic!("expected sync command");
+        };
+        assert!(feeds.is_empty());
+        assert_eq!(no_remote, true);
+    }
+
+    #[test]
+    fn test_parse_sync_with_feed_selectors_and_no_remote() {
+        let args = Args::parse_from(args(&[
+            "blog",
+            "sync",
+            "--feed",
+            "@df",
+            "--no-remote",
+            "--feed",
+            "@dg",
+        ]));
+        let Some(Command::Sync { feeds, no_remote }) = args.command else {
+            panic!("expected sync command");
+        };
+        assert_eq!(feeds, vec!["@df", "@dg"]);
+        assert_eq!(no_remote, true);
     }
 }

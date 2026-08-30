@@ -96,19 +96,26 @@ fn resolve_sync_sources(
     Ok(resolved)
 }
 
-pub(crate) fn cmd_sync(store: &mut BlogData, selectors: &[String]) -> anyhow::Result<()> {
-    // Sync with remote first so we discover feeds added on other devices
-    let result = do_sync_remote(store)?;
-
-    let needs_push = match result {
-        SyncResult::NoRemote => {
-            eprintln!(
-                "warning: no remote configured; run `blog git remote add origin <url>` to enable sync"
-            );
-            false
+pub(crate) fn cmd_sync(
+    store: &mut BlogData,
+    selectors: &[String],
+    no_remote: bool,
+) -> anyhow::Result<()> {
+    let needs_push = if !no_remote {
+        // Sync with remote first so we discover feeds added on other devices
+        let result = do_sync_remote(store)?;
+        match result {
+            SyncResult::NoRemote => {
+                eprintln!(
+                    "warning: no remote configured; run `blog git remote add origin <url>` to enable sync"
+                );
+                false
+            }
+            SyncResult::NoGitRepo => false,
+            SyncResult::Synced | SyncResult::AlreadyUpToDate => true,
         }
-        SyncResult::NoGitRepo => false,
-        SyncResult::Synced | SyncResult::AlreadyUpToDate => true,
+    } else {
+        false
     };
 
     let fi = feed_index(store.feeds());

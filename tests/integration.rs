@@ -1705,6 +1705,94 @@ fn test_sync_local_ahead_only() {
 }
 
 #[test]
+fn test_sync_no_remote_still_fetches_posts() {
+    let dir = TempDir::new().unwrap();
+    let server = MockServer::start();
+    let xml = rss_xml(
+        "Test Feed",
+        &[("Test Post", "Mon, 01 Jan 2024 00:00:00 +0000")],
+    );
+    server.mock(|when, then| {
+        when.method(GET).path("/feed.xml");
+        then.status(200)
+            .header("Content-Type", "application/rss+xml")
+            .body(&xml);
+    });
+    let url = server.url("/feed.xml");
+
+    // Initial git repo, like init_git_store without adding remote
+    git(dir.path(), &["init"]);
+    git_config_test_user(dir.path());
+    fs::write(dir.path().join(".keep"), "").unwrap();
+    git(dir.path(), &["add", "."]);
+    git(dir.path(), &["commit", "-m", "init"]);
+
+    insert_feed(dir.path(), &url);
+    run_blog(dir.path(), &["sync", "--no-remote"]).success();
+
+    let posts = read_table(&dir.path().join("posts"));
+    assert!(
+        posts
+            .iter()
+            .any(|p| p["title"].as_str() == Some("Test Post")),
+        "--no-remote should still fetch posts locally, got: {posts:?}"
+    );
+}
+
+#[test]
+fn test_sync_no_remote_does_not_pull_remote_feed() {
+    let origin_dir = TempDir::new().unwrap();
+    git(origin_dir.path(), &["init", "--bare"]);
+
+    let store_dir = TempDir::new().unwrap();
+    init_git_store(store_dir.path(), origin_dir.path());
+
+    // Remote device adds a feed and pushes
+    let (other_td, other_dir) = clone_store(origin_dir.path());
+    insert_feed(&other_dir, "https://example.com/remote.xml");
+    git(&other_dir, &["push", "origin", "HEAD"]);
+    drop(other_td);
+
+    // Sync without remote should NOT merge in the remote feed
+    run_blog(store_dir.path(), &["sync", "--no-remote"]).success();
+
+    // Verify
+    let feeds = read_table(&store_dir.path().join("feeds"));
+    assert!(
+        !feeds
+            .iter()
+            .any(|f| f["url"].as_str() == Some("https://example.com/remote.xml")),
+        "--no-remote should not pull the remote feed, got: {feeds:?}"
+    );
+}
+
+#[test]
+fn test_sync_no_remote_does_not_push() {
+    let origin_dir = TempDir::new().unwrap();
+    git(origin_dir.path(), &["init", "--bare"]);
+
+    let store_dir = TempDir::new().unwrap();
+    init_git_store(store_dir.path(), origin_dir.path());
+
+    // Add a feed locally (auto-committed)
+    insert_feed(store_dir.path(), "https://example.com/a.xml");
+
+    // Sync with --no-remote should NOT push local changes
+    run_blog(store_dir.path(), &["sync", "--no-remote"]).success();
+
+    // Verify
+    let (clone_td, clone_dir) = clone_store(origin_dir.path());
+    let feeds = read_table(&clone_dir.join("feeds"));
+    assert!(
+        !feeds
+            .iter()
+            .any(|f| f["url"].as_str() == Some("https://example.com/a.xml")),
+        "--no-remote should not push the local feed to remote, got: {feeds:?}"
+    );
+    drop(clone_td);
+}
+
+#[test]
 fn test_sync_remote_ahead_only() {
     let origin_dir = TempDir::new().unwrap();
     git(origin_dir.path(), &["init", "--bare"]);
