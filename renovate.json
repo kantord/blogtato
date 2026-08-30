@@ -1,9 +1,26 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended",
-    "helpers:pinGitHubActionDigests",
+    "config:best-practices",
+    "helpers:pinGitHubActionDigestsToSemver",
     ":pinDependencies",
     ":semanticCommits"
+  ],
+  "minimumReleaseAge": "3 days",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true
+  },
+  "packageRules": [
+    {
+      "description": "Patch updates are low-review-effort; land them as one PR",
+      "matchUpdateTypes": ["patch"],
+      "groupName": "patch updates"
+    },
+    {
+      "description": "Action digest bumps are independent and noisy; one PR is enough.",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions"
+    }
   ]
 }
