@@ -21,7 +21,7 @@ ureq = "=3.3.0"
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.149"
 itertools = "=0.15.0"
-rss = "=2.0.13"
+rss = "=2.1.0"
 url = "=2.5.8"
 dirs = "=6.0.0"
 indicatif = "=0.18.6"
