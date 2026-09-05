@@ -17,6 +17,13 @@ pub(crate) fn cmd_import(store: &mut BlogData, path: &Path) -> anyhow::Result<()
         anyhow::bail!("no feeds found in {}", path.display());
     }
 
+    if let Some(url) = urls.iter().find(|url| url.starts_with("stdin:")) {
+        anyhow::bail!(
+            "{url} is an ingest-only feed and cannot be imported; \
+             pipe its RSS/Atom into `blog feed ingest` instead"
+        );
+    }
+
     store.transact(&format!("import {} feeds from OPML", urls.len()), |tx| {
         for url in &urls {
             cmd_add(tx, url)?;

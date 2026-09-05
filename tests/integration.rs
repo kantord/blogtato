@@ -3235,6 +3235,26 @@ fn test_feed_import_opml() {
     assert_eq!(urls.len(), 3, "should have exactly 3 feeds, got: {urls:?}");
 }
 
+#[test]
+fn test_feed_import_rejects_stdin_urls() {
+    let ctx = TestContext::new();
+
+    let opml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+  <body>
+    <outline text="HN" xmlUrl="stdin:hn-updates" />
+  </body>
+</opml>"#;
+
+    let opml_path = ctx.dir.path().join("feeds.opml");
+    fs::write(&opml_path, opml).unwrap();
+
+    let assert = ctx.run(&["feed", "import", opml_path.to_str().unwrap()]);
+    assert.failure();
+
+    assert!(ctx.read_feeds().is_empty());
+}
+
 /// Write a meta entry directly into the store's meta table.
 fn insert_meta(store_dir: &Path, key: &str, value: &str) {
     let meta_dir = store_dir.join("meta");

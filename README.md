@@ -104,6 +104,11 @@ and others) using an OPML file:
 blog feed import feeds.opml
 ```
 
+`stdin:`-prefixed feeds from `blog feed ingest` are exported to OPML for
+reference, but cannot be imported back — an OPML entry has no way to carry
+the scraper command, so `blog feed import` rejects them with an error. Ingest
+those feeds directly instead.
+
 Fetch and list latest posts:
 
 ```bash
