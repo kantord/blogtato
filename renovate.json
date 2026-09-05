@@ -7,11 +7,21 @@
     ":semanticCommits"
   ],
   "minimumReleaseAge": "3 days",
+  "vulnerabilityAlerts": {
+    "minimumReleaseAge": null,
+    "labels": ["security"]
+  },
   "lockFileMaintenance": {
     "enabled": true,
     "automerge": true
   },
   "packageRules": [
+    {
+      "description": "Tag-tracking actions (non-semver refs) only get digest updates, which have no release timestamp, so the age gate would block them forever",
+      "matchDepNames": ["dtolnay/rust-toolchain"],
+      "matchUpdateTypes": ["digest"],
+      "minimumReleaseAge": null
+    },
     {
       "description": "Patch updates are low-review-effort; land them as one PR",
       "matchUpdateTypes": ["patch"],
