@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.26](https://github.com/kantord/blogtato/compare/v0.1.25...v0.1.26) - 2026-09-05
+
+### Added
+
+- compact mode for grouped output ([#235](https://github.com/kantord/blogtato/pull/235))
+- pipe output through pager when it exceeds terminal height ([#233](https://github.com/kantord/blogtato/pull/233))
+- replace add-script with feed ingest from stdin ([#231](https://github.com/kantord/blogtato/pull/231))
+- add no-remote flag to command sync ([#218](https://github.com/kantord/blogtato/pull/218))
+
+### Fixed
+
+- *(deps)* update rust crate quick-xml to v0.42.0 ([#232](https://github.com/kantord/blogtato/pull/232))
+- *(deps)* update rust crate ureq to v3.4.0 ([#226](https://github.com/kantord/blogtato/pull/226))
+- *(deps)* update rust crate open to v5.4.2 ([#207](https://github.com/kantord/blogtato/pull/207))
+- *(deps)* update rust crate rss to v2.1.0 ([#206](https://github.com/kantord/blogtato/pull/206))
+- *(deps)* update rust crate quick-xml to v0.41.0 ([#203](https://github.com/kantord/blogtato/pull/203))
+- *(deps)* update rust crate open to v5.3.6 ([#201](https://github.com/kantord/blogtato/pull/201))
+- *(deps)* update rust crate indicatif to v0.18.6 ([#202](https://github.com/kantord/blogtato/pull/202))
+- *(deps)* update rust crate atom_syndication to v0.12.9 ([#205](https://github.com/kantord/blogtato/pull/205))
+- *(deps)* update rust crate itertools to v0.15.0 ([#198](https://github.com/kantord/blogtato/pull/198))
+- *(deps)* update rust crate quick-xml to v0.40.1 ([#188](https://github.com/kantord/blogtato/pull/188))
+
+### Other
+
+- update some dependencies ([#234](https://github.com/kantord/blogtato/pull/234))
+- small fixes ([#230](https://github.com/kantord/blogtato/pull/230))
+- *(deps)* update dtolnay/rust-toolchain digest to 6bed076 ([#229](https://github.com/kantord/blogtato/pull/229))
+- fix minimum dep age logic ([#228](https://github.com/kantord/blogtato/pull/228))
+- *(deps)* update github actions ([#224](https://github.com/kantord/blogtato/pull/224))
+- improve dependency management ([#221](https://github.com/kantord/blogtato/pull/221))
+- *(deps)* update actions/checkout digest to 3d3c42e ([#213](https://github.com/kantord/blogtato/pull/213))
+- fix failing lockfile ([#215](https://github.com/kantord/blogtato/pull/215))
+- *(deps)* update dtolnay/rust-toolchain digest to 4be7066 ([#204](https://github.com/kantord/blogtato/pull/204))
+- update Feedly link
+- *(deps)* update actions/checkout action to v7 ([#199](https://github.com/kantord/blogtato/pull/199))
+- *(deps)* update release-plz/action digest to e879257 ([#196](https://github.com/kantord/blogtato/pull/196))
+- *(deps)* update actions/checkout digest to df4cb1c ([#194](https://github.com/kantord/blogtato/pull/194))
+
 ## [0.1.25](https://github.com/kantord/blogtato/compare/v0.1.24...v0.1.25) - 2026-05-12
 
 ### Fixed
