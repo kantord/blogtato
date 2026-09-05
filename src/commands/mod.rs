@@ -5,6 +5,7 @@ pub mod export;
 pub mod feed_export;
 pub mod feed_ls;
 pub mod import;
+pub mod ingest;
 pub mod open;
 pub mod remove;
 pub mod show;

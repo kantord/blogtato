@@ -16,8 +16,15 @@ const INITIAL_UNREAD_CAP: usize = 5;
 const FETCH_THREADS: usize = 48;
 
 /// Fetch all feeds in parallel.
+///
+/// `stdin:`-prefixed sources are ingest-only (populated via `blog feed
+/// ingest`) and have no URL to fetch, so they are skipped here.
 pub(crate) fn fetch_feeds(sources: &[FeedSource], pb: &ProgressBar) -> Vec<FetchResult> {
     let client = crate::utils::http::http_client();
+    let sources: Vec<&FeedSource> = sources
+        .iter()
+        .filter(|source| !source.url.starts_with("stdin:"))
+        .collect();
     pb.set_length(sources.len() as u64);
 
     let pool = rayon::ThreadPoolBuilder::new()
@@ -30,9 +37,9 @@ pub(crate) fn fetch_feeds(sources: &[FeedSource], pb: &ProgressBar) -> Vec<Fetch
             .par_iter()
             .map(|source| {
                 pb.set_message(source.url.clone());
-                let result = crate::feed::fetch_source(&client, source).map_err(|e| e.to_string());
+                let result = crate::feed::fetch(&client, &source.url).map_err(|e| e.to_string());
                 pb.inc(1);
-                (source.clone(), result)
+                ((*source).clone(), result)
             })
             .collect()
     })
@@ -78,7 +85,12 @@ pub(crate) fn initial_read_ids(items: &[FeedItem], now: DateTime<Utc>) -> Vec<St
         .collect()
 }
 
-fn apply_feed(tx: &mut Transaction, mut source: FeedSource, meta: FeedMeta, items: Vec<FeedItem>) {
+pub(crate) fn apply_feed(
+    tx: &mut Transaction,
+    mut source: FeedSource,
+    meta: FeedMeta,
+    items: Vec<FeedItem>,
+) {
     let feed_id = tx.feeds.id_of(&source);
     let now = Utc::now();
 

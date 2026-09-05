@@ -140,13 +140,10 @@ enum FeedCommand {
         /// The feed URL to subscribe to
         urls: Vec<String>,
     },
-    /// Subscribe to a script that prints RSS/Atom XML to stdout
-    AddScript {
-        /// Stable script feed name. Stored as script:<name>.
+    /// Ingest RSS/Atom XML from stdin into a feed by name. Stored as stdin:<name>.
+    Ingest {
+        /// Stable feed name. Stored as stdin:<name>.
         name: String,
-        /// Command and arguments to run during sync
-        #[arg(num_args = 1.., trailing_var_arg = true, allow_hyphen_values = true)]
-        command: Vec<String>,
     },
     /// Unsubscribe from a feed by URL or @shorthand
     Rm {
@@ -272,18 +269,15 @@ fn run() -> anyhow::Result<()> {
             eprintln!("Run `blog sync` to fetch posts.");
         }
         Some(Command::Feed {
-            command:
-                FeedCommand::AddScript {
-                    ref name,
-                    ref command,
-                },
+            command: FeedCommand::Ingest { ref name },
         }) => {
             reject_filter(&filter, "feed")?;
-            let added = store.transact(&format!("add script feed: {name}"), |tx| {
-                commands::add::cmd_add_script(tx, name, command)
+            let mut bytes = Vec::new();
+            std::io::Read::read_to_end(&mut std::io::stdin().lock(), &mut bytes)?;
+            let added = store.transact(&format!("ingest feed: {name}"), |tx| {
+                commands::ingest::cmd_ingest(tx, name, &bytes)
             })?;
-            eprintln!("Added {added}");
-            eprintln!("Run `blog sync` to fetch posts.");
+            eprintln!("Ingested {added}");
         }
         Some(Command::Feed {
             command: FeedCommand::Rm { ref urls },
