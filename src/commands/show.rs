@@ -9,7 +9,12 @@ use crate::display::{RenderCtx, Style, render_grouped};
 use crate::query::Query;
 use crate::query::resolve::resolve_posts;
 
-pub(crate) fn cmd_show(store: &BlogData, query: &Query, query_text: &str) -> anyhow::Result<()> {
+pub(crate) fn cmd_show(
+    store: &BlogData,
+    query: &Query,
+    query_text: &str,
+    compact: bool,
+) -> anyhow::Result<()> {
     let resolved = resolve_posts(store, query)?;
     ensure!(!resolved.items.is_empty(), "No matching posts");
 
@@ -34,12 +39,16 @@ pub(crate) fn cmd_show(store: &BlogData, query: &Query, query_text: &str) -> any
         color: is_tty,
         shorthand_width: RenderCtx::shorthand_width_from(&refs, &resolved.shorthands),
         max_width,
+        compact,
     };
     let mut output = render_grouped(&refs, &ctx);
     output.truncate(output.trim_end().len());
     output.push('\n');
 
     let term_height = terminal.map(|(_, h)| h.0 as usize).unwrap_or(usize::MAX);
+    // Compact mode reduces line_count by removing blank separators, so it can
+    // also reduce how often the pager kicks in below — this is intentional,
+    // not a bug: denser output needs the pager less often.
     let line_count = output.lines().count();
 
     // Leave one line free so the last line of output doesn't sit flush

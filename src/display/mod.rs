@@ -60,6 +60,7 @@ pub(crate) struct RenderCtx<'a> {
     pub color: bool,
     pub shorthand_width: usize,
     pub max_width: Option<usize>,
+    pub compact: bool,
 }
 
 impl<'a> RenderCtx<'a> {
@@ -140,6 +141,7 @@ mod tests {
             read_ids,
             color: false,
             max_width,
+            compact: false,
         }
     }
 
@@ -172,6 +174,7 @@ mod tests {
             color: false,
             shorthand_width: 3,
             max_width: None,
+            compact: false,
         };
         assert_eq!(item::format_item(&i, None, &ctx), expected);
     }
@@ -629,5 +632,87 @@ mod tests {
                 "{title} should be filtered out"
             );
         }
+    }
+
+    #[test]
+    fn test_render_grouped_compact() {
+        let items = [
+            feed_item("Post A", "2024-01-02", "Alice"),
+            feed_item("Post B", "2024-01-02", "Bob"),
+            feed_item("Post C", "2024-01-01", "Alice"),
+        ];
+        let refs: Vec<&FeedItem> = items.iter().collect();
+
+        let keys = [GroupKey::Date];
+        let ctx = RenderCtx {
+            all_keys: &keys,
+            shorthand_width: RenderCtx::shorthand_width_from(&refs, &HashMap::new()),
+            shorthands: no_labels(),
+            feed_labels: no_labels(),
+            read_ids: no_reads(),
+            color: false,
+            max_width: None,
+            compact: true,
+        };
+        let output = render_grouped(&refs, &ctx);
+        // Compact: no blank line after header, no blank lines between groups
+        assert_eq!(
+            output,
+            "=== 2024-01-02 ===\n  *  Post A (Alice)\n  *  Post B (Bob)\n=== 2024-01-01 ===\n  *  Post C (Alice)\n"
+        );
+    }
+
+    #[test]
+    fn test_render_grouped_compact_flat_unchanged() {
+        let items = [
+            feed_item("Post A", "2024-01-02", "Alice"),
+            feed_item("Post B", "2024-01-01", "Bob"),
+        ];
+        let refs: Vec<&FeedItem> = items.iter().collect();
+
+        let ctx = RenderCtx {
+            all_keys: &[],
+            shorthand_width: RenderCtx::shorthand_width_from(&refs, &HashMap::new()),
+            shorthands: no_labels(),
+            feed_labels: no_labels(),
+            read_ids: no_reads(),
+            color: false,
+            max_width: None,
+            compact: true,
+        };
+        let output = render_grouped(&refs, &ctx);
+        // Flat output is identical whether compact or not
+        assert_eq!(
+            output,
+            "* 2024-01-02   Post A (Alice)\n* 2024-01-01   Post B (Bob)\n"
+        );
+    }
+
+    #[test]
+    fn test_render_grouped_compact_nested() {
+        let items = [
+            feed_item("Post A", "2024-01-02", "Alice"),
+            feed_item("Post B", "2024-01-02", "Bob"),
+            feed_item("Post C", "2024-01-01", "Alice"),
+        ];
+        let refs: Vec<&FeedItem> = items.iter().collect();
+
+        let keys = [GroupKey::Date, GroupKey::Feed];
+        let ctx = RenderCtx {
+            all_keys: &keys,
+            shorthand_width: RenderCtx::shorthand_width_from(&refs, &HashMap::new()),
+            shorthands: no_labels(),
+            feed_labels: no_labels(),
+            read_ids: no_reads(),
+            color: false,
+            max_width: None,
+            compact: true,
+        };
+        let output = render_grouped(&refs, &ctx);
+        // Top-level has no extra blank lines; nested still has separator
+        assert_eq!(
+            output,
+            "=== 2024-01-02 ===\n  --- Alice ---\n    *  Post A\n  --- Bob ---\n    *  Post B\n=== 2024-01-01 ===\n  --- Alice ---\n    *  Post C\n"
+        );
     }
 }

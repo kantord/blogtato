@@ -47,15 +47,17 @@ pub(crate) fn render_grouped(items: &[&FeedItem], ctx: &RenderCtx) -> String {
                 s.bold, s.reset
             )
             .unwrap();
-            if depth == 0 {
+            if depth == 0 && !ctx.compact {
                 writeln!(out).unwrap();
             }
             recurse(out, &group_items, rest, ctx);
-            if depth == 0 {
-                writeln!(out).unwrap();
-                writeln!(out).unwrap();
-            } else {
-                writeln!(out).unwrap();
+            if !ctx.compact {
+                if depth == 0 {
+                    writeln!(out).unwrap();
+                    writeln!(out).unwrap();
+                } else {
+                    writeln!(out).unwrap();
+                }
             }
         }
     }
