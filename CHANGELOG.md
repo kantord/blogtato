@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.25](https://github.com/kantord/blogtato/compare/v0.1.24...v0.1.25) - 2026-05-12
+
+### Fixed
+
+- *(deps)* update rust crate quick-xml to v0.40.0
+- *(deps)* update rust crate rss to v2.0.13
+- *(deps)* update rust crate open to v5.3.5
+- *(deps)* update rust crate atom_syndication to v0.12.8
+- *(deps)* update rust crate quick-xml to v0.39.4
+- *(deps)* update rust crate chumsky to v0.13.0
+- *(deps)* update rust crate quick-xml to v0.39.3
+
+### Other
+
+- merge
+- *(deps)* update release-plz/action digest to 064f4d1
+- *(deps)* update rust crate assert_cmd to v2.2.2
+
+## [0.1.24](https://github.com/kantord/blogtato/compare/v0.1.23...v0.1.24) - 2026-05-02
+
+### Added
+
+- serialize query back to token syntax via Display impl
+- summary footer with query echo ([#172](https://github.com/kantord/blogtato/pull/172))
+
+### Fixed
+
+- *(deps)* update rust crate open to v5.3.4
+- use sort_by instead of sort_by_key for date ordering
+- *(deps)* update rust crate clap to v4.6.1 ([#164](https://github.com/kantord/blogtato/pull/164))
+- *(deps)* update rust crate rayon to v1.12.0 ([#162](https://github.com/kantord/blogtato/pull/162))
+
+### Other
+
+- *(deps)* update rust crate assert_cmd to v2.2.1
+- *(deps)* update rust crate libc to v0.2.186
+- make clippy happy
+- fix failing ci and prek-related issues
+- fix clippy error ([#170](https://github.com/kantord/blogtato/pull/170))
+- *(deps)* update rust crate libc to v0.2.185 ([#161](https://github.com/kantord/blogtato/pull/161))
+
 ## [0.1.23](https://github.com/kantord/blogtato/compare/v0.1.22...v0.1.23) - 2026-04-06
 
 ### Added

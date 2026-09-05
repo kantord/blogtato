@@ -53,13 +53,13 @@ impl PostIndex {
     }
 
     fn filter_by_date(&mut self, query: &Query) {
-        if let Some(since) = query.date_filter.since {
+        if let Some(ref since) = query.date_filter.since {
             self.items
-                .retain(|(_, item)| item.date.is_some_and(|d| d >= since));
+                .retain(|(_, item)| item.date.is_some_and(|d| d >= since.resolved));
         }
-        if let Some(until) = query.date_filter.until {
+        if let Some(ref until) = query.date_filter.until {
             self.items
-                .retain(|(_, item)| item.date.is_some_and(|d| d <= until));
+                .retain(|(_, item)| item.date.is_some_and(|d| d <= until.resolved));
         }
     }
 

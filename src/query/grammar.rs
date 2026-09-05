@@ -1,28 +1,29 @@
-use chrono::{DateTime, NaiveDate, Utc};
+use chrono::{NaiveDate, Utc};
 use chumsky::prelude::*;
 
-use super::{GroupKey, ReadFilter};
+use super::{GroupKey, QueryDate, ReadFilter};
 use crate::utils::date::start_of_day;
 
 pub(super) enum Token {
     Group(GroupKey),
     FeedFilter(String),
     IdFilter(String),
-    Range(Option<DateTime<Utc>>, Option<DateTime<Utc>>),
+    Range(Option<QueryDate>, Option<QueryDate>),
     Shorthand(String),
     ReadStatus(ReadFilter),
 }
 
-fn date_value_core<'a>() -> impl Parser<'a, &'a str, DateTime<Utc>, extra::Err<Rich<'a, char>>> {
+fn date_value_core<'a>() -> impl Parser<'a, &'a str, QueryDate, extra::Err<Rich<'a, char>>> {
     let named = choice((just("today").to("today"), just("yesterday").to("yesterday")));
 
     let digits = text::digits(10).to_slice();
 
+    // Each unit variant carries (duration_unit_for_calc, raw_suffix)
     let relative = digits.then(choice((
-        just("months").to("months"),
-        just("m").to("months"),
-        just("w").to("w"),
-        just("d").to("d"),
+        just("months").to(("months", "months")),
+        just("m").to(("months", "m")),
+        just("w").to(("w", "w")),
+        just("d").to(("d", "d")),
     )));
 
     let absolute = text::digits(10)
@@ -33,36 +34,49 @@ fn date_value_core<'a>() -> impl Parser<'a, &'a str, DateTime<Utc>, extra::Err<R
         .then(text::digits(10).to_slice());
 
     choice((
-        named.map(|name| match name {
-            "today" => start_of_day(Utc::now().date_naive()),
-            "yesterday" => start_of_day((Utc::now() - chrono::Duration::days(1)).date_naive()),
-            _ => unreachable!(),
+        named.map(|name: &str| {
+            let resolved = match name {
+                "today" => start_of_day(Utc::now().date_naive()),
+                "yesterday" => start_of_day((Utc::now() - chrono::Duration::days(1)).date_naive()),
+                _ => unreachable!(),
+            };
+            QueryDate {
+                raw: name.to_string(),
+                resolved,
+            }
         }),
         absolute.try_map(|((year, month), day), span| {
             let s = format!("{year}-{month}-{day}");
             NaiveDate::parse_from_str(&s, "%Y-%m-%d")
-                .map(start_of_day)
+                .map(|d| QueryDate {
+                    raw: s.clone(),
+                    resolved: start_of_day(d),
+                })
                 .map_err(|_| Rich::custom(span, format!("Invalid date: {s}")))
         }),
-        relative.try_map(|(num_str, unit): (&str, &str), span| {
-            let n: i64 = num_str.parse().map_err(|_| {
-                Rich::custom(span, format!("Invalid number in duration: {num_str}"))
-            })?;
-            let duration = match unit {
-                "d" => chrono::Duration::days(n),
-                "w" => chrono::Duration::weeks(n),
-                "months" => chrono::Duration::days(n * 30),
-                _ => unreachable!(),
-            };
-            Ok(Utc::now() - duration)
-        }),
+        relative.try_map(
+            |(num_str, (calc_unit, raw_suffix)): (&str, (&str, &str)), span| {
+                let n: i64 = num_str.parse().map_err(|_| {
+                    Rich::custom(span, format!("Invalid number in duration: {num_str}"))
+                })?;
+                let duration = match calc_unit {
+                    "d" => chrono::Duration::days(n),
+                    "w" => chrono::Duration::weeks(n),
+                    "months" => chrono::Duration::days(n * 30),
+                    _ => unreachable!(),
+                };
+                Ok(QueryDate {
+                    raw: format!("{num_str}{raw_suffix}"),
+                    resolved: Utc::now() - duration,
+                })
+            },
+        ),
     ))
     .labelled("date value (e.g. 2024-01-15, 3d, 2w, 1m, today, yesterday)")
 }
 
-#[cfg(test)]
 pub(super) fn date_value_parser<'a>()
--> impl Parser<'a, &'a str, DateTime<Utc>, extra::Err<Rich<'a, char>>> {
+-> impl Parser<'a, &'a str, QueryDate, extra::Err<Rich<'a, char>>> {
     date_value_core().then_ignore(end().labelled("end of date value"))
 }
 

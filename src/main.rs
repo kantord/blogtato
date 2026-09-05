@@ -86,6 +86,9 @@ enum Command {
         /// Repeat to sync only selected feeds by @shorthand
         #[arg(long = "feed", value_name = "SHORTHAND")]
         feeds: Vec<String>,
+        /// Do not interact with the remote repository
+        #[arg(long)]
+        no_remote: bool,
     },
     /// Mark a post as unread
     Unread,
@@ -140,6 +143,11 @@ enum FeedCommand {
         /// The feed URL to subscribe to
         urls: Vec<String>,
     },
+    /// Ingest RSS/Atom XML from stdin into a feed by name. Stored as stdin:<name>.
+    Ingest {
+        /// Stable feed name. Stored as stdin:<name>.
+        name: String,
+    },
     /// Unsubscribe from a feed by URL or @shorthand
     Rm {
         /// The feed URL or @shorthand to unsubscribe from
@@ -182,13 +190,19 @@ fn store_dir() -> anyhow::Result<PathBuf> {
         .ok_or_else(|| anyhow::anyhow!("could not determine data directory; set RSS_STORE"))
 }
 
-fn parse_query_or_default(args: &[String], store: &data::BlogData) -> anyhow::Result<query::Query> {
-    if args.is_empty() {
+fn parse_query_or_default(
+    args: &[String],
+    store: &data::BlogData,
+) -> anyhow::Result<(query::Query, String)> {
+    let query = if args.is_empty() {
         let default = data::get_config_value(store, "default_query");
-        query::parse_query_str(default.as_deref().unwrap_or(query::DEFAULT_QUERY))
+        let text = default.as_deref().unwrap_or(query::DEFAULT_QUERY);
+        query::parse_query_str(text)?
     } else {
-        query::parse_query(args)
-    }
+        query::parse_query(args)?
+    };
+    let text = query.to_string();
+    Ok((query, text))
 }
 
 fn reject_filter(filter: &[String], command: &str) -> anyhow::Result<()> {
@@ -211,19 +225,27 @@ fn run() -> anyhow::Result<()> {
     let mut store = data::BlogData::open(&store_dir)?;
     data::check_schema_version(&mut store)?;
 
-    let show_opts = commands::show::ShowOpts {
-        compact: args.compact || data::get_config_value(&store, "compact") == Some("true".to_string()),
-    };
+    let compact = args.compact
+        || match data::get_config_value(&store, "compact").as_deref() {
+            None => false,
+            Some("true") => true,
+            Some("false") => false,
+            Some(other) => {
+                anyhow::bail!(
+                    "invalid value for config key 'compact': '{other}' (expected 'true' or 'false')"
+                )
+            }
+        };
     match args.command {
         // Commands that accept a query/filter
         Some(Command::Show { ref args }) => {
             let all_args: Vec<String> = filter.into_iter().chain(args.iter().cloned()).collect();
-            let q = parse_query_or_default(&all_args, &store)?;
-            commands::show::cmd_show(&store, &q, &show_opts)?;
+            let (q, query_text) = parse_query_or_default(&all_args, &store)?;
+            commands::show::cmd_show(&store, &q, &query_text, compact)?;
         }
         Some(Command::Export { ref args }) => {
             let all_args: Vec<String> = filter.into_iter().chain(args.iter().cloned()).collect();
-            let q = parse_query_or_default(&all_args, &store)?;
+            let (q, _) = parse_query_or_default(&all_args, &store)?;
             commands::export::cmd_export(&store, &q)?;
         }
         Some(Command::Open) => {
@@ -239,8 +261,8 @@ fn run() -> anyhow::Result<()> {
             commands::open::cmd_unread(&mut store, &q)?;
         }
         None => {
-            let q = parse_query_or_default(&filter, &store)?;
-            commands::show::cmd_show(&store, &q, &show_opts)?;
+            let (q, query_text) = parse_query_or_default(&filter, &store)?;
+            commands::show::cmd_show(&store, &q, &query_text, compact)?;
         }
 
         // Commands that reject filters
@@ -259,6 +281,19 @@ fn run() -> anyhow::Result<()> {
                 eprintln!("Added {resolved}");
             }
             eprintln!("Run `blog sync` to fetch posts.");
+        }
+        Some(Command::Feed {
+            command: FeedCommand::Ingest { ref name },
+        }) => {
+            reject_filter(&filter, "feed")?;
+            let mut bytes = Vec::new();
+            std::io::Read::read_to_end(&mut std::io::stdin().lock(), &mut bytes)?;
+            let ingest_filter = data::get_config_value(&store, "ingest_filter");
+            let added = store.transact(&format!("ingest feed: {name}"), |tx| {
+                commands::ingest::cmd_ingest(tx, name, &bytes, ingest_filter.as_deref())
+            })?;
+            eprintln!("Ingested {added}");
+            eprintln!("Run `blog sync` to sync this feed to your other devices.");
         }
         Some(Command::Feed {
             command: FeedCommand::Rm { ref urls },
@@ -289,9 +324,12 @@ fn run() -> anyhow::Result<()> {
             commands::import::cmd_import(&mut store, path)?;
         }
 
-        Some(Command::Sync { ref feeds }) => {
+        Some(Command::Sync {
+            ref feeds,
+            no_remote,
+        }) => {
             reject_filter(&filter, "sync")?;
-            commands::sync::cmd_sync(&mut store, feeds)?;
+            commands::sync::cmd_sync(&mut store, feeds, no_remote)?;
         }
         Some(Command::Git { ref args }) => {
             reject_filter(&filter, "git")?;
@@ -409,27 +447,58 @@ mod tests {
     #[test]
     fn test_parse_sync_without_feed_selectors() {
         let args = Args::parse_from(args(&["blog", "sync"]));
-        let Some(Command::Sync { feeds }) = args.command else {
+        let Some(Command::Sync { feeds, no_remote }) = args.command else {
             panic!("expected sync command");
         };
         assert!(feeds.is_empty());
+        assert_eq!(no_remote, false);
     }
 
     #[test]
     fn test_parse_sync_with_one_feed_selector() {
         let args = Args::parse_from(args(&["blog", "sync", "--feed", "@df"]));
-        let Some(Command::Sync { feeds }) = args.command else {
+        let Some(Command::Sync { feeds, no_remote }) = args.command else {
             panic!("expected sync command");
         };
         assert_eq!(feeds, vec!["@df"]);
+        assert_eq!(no_remote, false);
     }
 
     #[test]
     fn test_parse_sync_with_multiple_feed_selectors() {
         let args = Args::parse_from(args(&["blog", "sync", "--feed", "@df", "--feed", "@dg"]));
-        let Some(Command::Sync { feeds }) = args.command else {
+        let Some(Command::Sync { feeds, no_remote }) = args.command else {
             panic!("expected sync command");
         };
         assert_eq!(feeds, vec!["@df", "@dg"]);
+        assert_eq!(no_remote, false);
+    }
+
+    #[test]
+    fn test_parse_sync_with_no_remote() {
+        let args = Args::parse_from(args(&["blog", "sync", "--no-remote"]));
+        let Some(Command::Sync { feeds, no_remote }) = args.command else {
+            panic!("expected sync command");
+        };
+        assert!(feeds.is_empty());
+        assert_eq!(no_remote, true);
+    }
+
+    #[test]
+    fn test_parse_sync_with_feed_selectors_and_no_remote() {
+        let args = Args::parse_from(args(&[
+            "blog",
+            "sync",
+            "--feed",
+            "@df",
+            "--no-remote",
+            "--feed",
+            "@dg",
+        ]));
+        let Some(Command::Sync { feeds, no_remote }) = args.command else {
+            panic!("expected sync command");
+        };
+        assert_eq!(feeds, vec!["@df", "@dg"]);
+        assert_eq!(no_remote, true);
     }
 }

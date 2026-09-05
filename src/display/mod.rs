@@ -81,13 +81,17 @@ impl<'a> RenderCtx<'a> {
 mod tests {
     use super::*;
     use crate::data::schema::FeedItem;
-    use crate::query::DateFilter;
+    use crate::query::{DateFilter, QueryDate};
     use crate::utils::date::start_of_day;
     use chrono::{DateTime, NaiveDate, Utc};
     use rstest::rstest;
 
     fn utc_date(year: i32, month: u32, day: u32) -> DateTime<Utc> {
         start_of_day(NaiveDate::from_ymd_opt(year, month, day).unwrap())
+    }
+
+    fn query_date(year: i32, month: u32, day: u32) -> QueryDate {
+        format!("{year:04}-{month:02}-{day:02}").parse().unwrap()
     }
 
     fn feed_item(title: &str, date: &str, feed: &str) -> FeedItem {
@@ -543,16 +547,16 @@ mod tests {
         let filtered: Vec<&FeedItem> = items
             .iter()
             .filter(|item| {
-                if let Some(since) = date_filter.since {
+                if let Some(ref since) = date_filter.since {
                     match item.date {
-                        Some(d) if d < since => return false,
+                        Some(d) if d < since.resolved => return false,
                         None => return false,
                         _ => {}
                     }
                 }
-                if let Some(until) = date_filter.until {
+                if let Some(ref until) = date_filter.until {
                     match item.date {
-                        Some(d) if d > until => return false,
+                        Some(d) if d > until.resolved => return false,
                         None => return false,
                         _ => {}
                     }
@@ -570,12 +574,12 @@ mod tests {
     }
 
     #[rstest]
-    #[case::since_filters_old(Some(utc_date(2024, 1, 15)), None, &["Mid Post", "New Post"], &["Old Post"])]
-    #[case::until_filters_new(None, Some(utc_date(2024, 1, 15)), &["Old Post", "Mid Post"], &["New Post"])]
-    #[case::since_and_until(Some(utc_date(2024, 1, 10)), Some(utc_date(2024, 1, 20)), &["Mid Post"], &["Old Post", "New Post"])]
+    #[case::since_filters_old(Some(query_date(2024, 1, 15)), None, &["Mid Post", "New Post"], &["Old Post"])]
+    #[case::until_filters_new(None, Some(query_date(2024, 1, 15)), &["Old Post", "Mid Post"], &["New Post"])]
+    #[case::since_and_until(Some(query_date(2024, 1, 10)), Some(query_date(2024, 1, 20)), &["Mid Post"], &["Old Post", "New Post"])]
     fn test_date_filter(
-        #[case] since: Option<DateTime<Utc>>,
-        #[case] until: Option<DateTime<Utc>>,
+        #[case] since: Option<QueryDate>,
+        #[case] until: Option<QueryDate>,
         #[case] present: &[&str],
         #[case] absent: &[&str],
     ) {
@@ -601,11 +605,11 @@ mod tests {
     }
 
     #[rstest]
-    #[case::since_includes_boundary(Some(utc_date(2024, 1, 15)), None, &["Exact"], &["Before"])]
-    #[case::until_includes_boundary(None, Some(utc_date(2024, 1, 15)), &["Exact"], &["After"])]
+    #[case::since_includes_boundary(Some(query_date(2024, 1, 15)), None, &["Exact"], &["Before"])]
+    #[case::until_includes_boundary(None, Some(query_date(2024, 1, 15)), &["Exact"], &["After"])]
     fn test_boundary_inclusion(
-        #[case] since: Option<DateTime<Utc>>,
-        #[case] until: Option<DateTime<Utc>>,
+        #[case] since: Option<QueryDate>,
+        #[case] until: Option<QueryDate>,
         #[case] present: &[&str],
         #[case] absent: &[&str],
     ) {

@@ -1,9 +1,36 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended",
-    "helpers:pinGitHubActionDigests",
+    "config:best-practices",
+    "helpers:pinGitHubActionDigestsToSemver",
     ":pinDependencies",
     ":semanticCommits"
+  ],
+  "minimumReleaseAge": "5 days",
+  "vulnerabilityAlerts": {
+    "minimumReleaseAge": "3 days",
+    "labels": ["security"]
+  },
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true
+  },
+  "packageRules": [
+    {
+      "description": "Tag-tracking actions (non-semver refs) only get digest updates, which have no release timestamp, so the age gate would block them forever",
+      "matchDepNames": ["dtolnay/rust-toolchain"],
+      "matchUpdateTypes": ["digest"],
+      "minimumReleaseAge": null
+    },
+    {
+      "description": "Patch updates are low-review-effort; land them as one PR",
+      "matchUpdateTypes": ["patch"],
+      "groupName": "patch updates"
+    },
+    {
+      "description": "Action digest bumps are independent and noisy; one PR is enough.",
+      "matchManagers": ["github-actions"],
+      "groupName": "github actions"
+    }
   ]
 }

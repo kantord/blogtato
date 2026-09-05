@@ -2,6 +2,8 @@ mod grammar;
 pub(crate) mod resolve;
 
 use std::collections::HashMap;
+use std::fmt;
+use std::str::FromStr;
 
 use anyhow::{bail, ensure};
 use chrono::{DateTime, Utc};
@@ -11,9 +13,38 @@ use crate::data::schema::FeedItem;
 use grammar::{Token, arg_parser};
 
 #[derive(Clone, Debug)]
+pub(crate) struct QueryDate {
+    raw: String,
+    pub resolved: DateTime<Utc>,
+}
+
+impl fmt::Display for QueryDate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.raw)
+    }
+}
+
+impl FromStr for QueryDate {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> anyhow::Result<Self> {
+        grammar::date_value_parser()
+            .parse(s)
+            .into_result()
+            .map_err(|e| anyhow::anyhow!("Invalid date: {:?}", e))
+    }
+}
+
+impl std::ops::Sub for QueryDate {
+    type Output = chrono::Duration;
+    fn sub(self, rhs: QueryDate) -> chrono::Duration {
+        self.resolved - rhs.resolved
+    }
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct DateFilter {
-    pub since: Option<DateTime<Utc>>,
-    pub until: Option<DateTime<Utc>>,
+    pub since: Option<QueryDate>,
+    pub until: Option<QueryDate>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -134,13 +165,13 @@ pub(crate) fn parse_query(args: &[String]) -> anyhow::Result<Query> {
         }
     }
 
-    if let (Some(s), Some(u)) = (since, until) {
+    if let (Some(s), Some(u)) = (since.as_ref(), until.as_ref()) {
         ensure!(
-            s <= u,
+            s.resolved <= u.resolved,
             "Invalid date range: {} is after {}. \
              The start date must be before the end date, e.g. 3w..1w instead of 1w..3w.",
-            s.format("%Y-%m-%d"),
-            u.format("%Y-%m-%d"),
+            s.resolved.format("%Y-%m-%d"),
+            u.resolved.format("%Y-%m-%d"),
         );
     }
 
@@ -152,6 +183,35 @@ pub(crate) fn parse_query(args: &[String]) -> anyhow::Result<Query> {
         shorthands,
         read_filter,
     })
+}
+
+impl fmt::Display for Query {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut parts: Vec<String> = Vec::new();
+        match self.read_filter {
+            ReadFilter::Unread => parts.push(".unread".to_string()),
+            ReadFilter::Read => parts.push(".read".to_string()),
+            ReadFilter::All => parts.push(".all".to_string()),
+            ReadFilter::Any => {}
+        }
+        if let Some(ref feed) = self.filter {
+            parts.push(format!("@{feed}"));
+        }
+        match (&self.date_filter.since, &self.date_filter.until) {
+            (Some(s), Some(u)) => parts.push(format!("{s}..{u}")),
+            (Some(s), None) => parts.push(format!("{s}..")),
+            (None, Some(u)) => parts.push(format!("..{u}")),
+            (None, None) => {}
+        }
+        for key in &self.keys {
+            parts.push(match key {
+                GroupKey::Date => "/d".to_string(),
+                GroupKey::Week => "/w".to_string(),
+                GroupKey::Feed => "/f".to_string(),
+            });
+        }
+        write!(f, "{}", parts.join(" "))
+    }
 }
 
 #[cfg(test)]
@@ -210,7 +270,7 @@ mod tests {
         assert_eq!(q.filter, Some("myblog".to_string()));
     }
 
-    fn parse_date(value: &str) -> anyhow::Result<DateTime<Utc>> {
+    fn parse_date(value: &str) -> anyhow::Result<QueryDate> {
         let parser = date_value_parser();
         parser
             .parse(value)
@@ -221,13 +281,13 @@ mod tests {
     #[test]
     fn test_parse_date_value_absolute_date() {
         let dt = parse_date("2024-01-15").unwrap();
-        assert_eq!(dt.format("%Y-%m-%d").to_string(), "2024-01-15");
+        assert_eq!(dt.resolved.format("%Y-%m-%d").to_string(), "2024-01-15");
     }
 
     #[test]
     fn test_parse_date_value_another_absolute_date() {
         let dt = parse_date("2024-04-01").unwrap();
-        assert_eq!(dt.format("%Y-%m-%d").to_string(), "2024-04-01");
+        assert_eq!(dt.resolved.format("%Y-%m-%d").to_string(), "2024-04-01");
     }
 
     #[rstest]
@@ -237,7 +297,7 @@ mod tests {
     #[case::three_months_short("3m", 85, 95)]
     fn test_parse_date_relative(#[case] input: &str, #[case] min_days: i64, #[case] max_days: i64) {
         let dt = parse_date(input).unwrap();
-        let diff_days = (Utc::now() - dt).num_days();
+        let diff_days = (Utc::now() - dt.resolved).num_days();
         assert!(
             (min_days..=max_days).contains(&diff_days),
             "{input} should be ~{min_days}-{max_days} days ago, got {diff_days} days"
@@ -249,7 +309,7 @@ mod tests {
         let dt = parse_date("yesterday").unwrap();
         let expected = start_of_day((Utc::now() - chrono::Duration::days(1)).date_naive());
         assert_eq!(
-            dt.format("%Y-%m-%d").to_string(),
+            dt.resolved.format("%Y-%m-%d").to_string(),
             expected.format("%Y-%m-%d").to_string()
         );
     }
@@ -259,7 +319,7 @@ mod tests {
         let dt = parse_date("today").unwrap();
         let expected = start_of_day(Utc::now().date_naive());
         assert_eq!(
-            dt.format("%Y-%m-%d").to_string(),
+            dt.resolved.format("%Y-%m-%d").to_string(),
             expected.format("%Y-%m-%d").to_string()
         );
     }
@@ -281,11 +341,21 @@ mod tests {
     fn test_range_both() {
         let q = parse_query(&args(&["2024-01-15..2024-02-01"])).unwrap();
         assert_eq!(
-            q.date_filter.since.unwrap().format("%Y-%m-%d").to_string(),
+            q.date_filter
+                .since
+                .unwrap()
+                .resolved
+                .format("%Y-%m-%d")
+                .to_string(),
             "2024-01-15"
         );
         assert_eq!(
-            q.date_filter.until.unwrap().format("%Y-%m-%d").to_string(),
+            q.date_filter
+                .until
+                .unwrap()
+                .resolved
+                .format("%Y-%m-%d")
+                .to_string(),
             "2024-02-01"
         );
     }
@@ -294,7 +364,12 @@ mod tests {
     fn test_range_open_end() {
         let q = parse_query(&args(&["2024-01-15.."])).unwrap();
         assert_eq!(
-            q.date_filter.since.unwrap().format("%Y-%m-%d").to_string(),
+            q.date_filter
+                .since
+                .unwrap()
+                .resolved
+                .format("%Y-%m-%d")
+                .to_string(),
             "2024-01-15"
         );
         assert!(q.date_filter.until.is_none());
@@ -305,7 +380,12 @@ mod tests {
         let q = parse_query(&args(&["..2024-02-01"])).unwrap();
         assert!(q.date_filter.since.is_none());
         assert_eq!(
-            q.date_filter.until.unwrap().format("%Y-%m-%d").to_string(),
+            q.date_filter
+                .until
+                .unwrap()
+                .resolved
+                .format("%Y-%m-%d")
+                .to_string(),
             "2024-02-01"
         );
     }
@@ -315,7 +395,7 @@ mod tests {
         let q = parse_query(&args(&["3w..1w"])).unwrap();
         assert!(q.date_filter.since.is_some());
         assert!(q.date_filter.until.is_some());
-        assert!(q.date_filter.since.unwrap() < q.date_filter.until.unwrap());
+        assert!(q.date_filter.since.unwrap().resolved < q.date_filter.until.unwrap().resolved);
     }
 
     #[test]
@@ -372,5 +452,165 @@ mod tests {
         let q = parse_query(&args(&["id:abc123", ".all"])).unwrap();
         assert_eq!(q.id_filter, Some("abc123".to_string()));
         assert_eq!(q.read_filter, ReadFilter::All);
+    }
+
+    // ── QueryDate Display tests ──────────────────────────────────────────────
+
+    /// QueryDate::Display must echo back the exact raw text, not a resolved date.
+    #[rstest]
+    #[case("90d")]
+    #[case("2w")]
+    #[case("today")]
+    #[case("yesterday")]
+    #[case("2024-01-15")]
+    #[case("3months")]
+    fn test_query_date_display_preserves_raw_text(#[case] input: &str) {
+        let qd: QueryDate = input.parse().expect("should parse as QueryDate");
+        assert_eq!(qd.to_string(), input);
+    }
+
+    // ── Query Display: read filter ───────────────────────────────────────────
+
+    #[test]
+    fn test_display_read_filter_unread() {
+        let q = parse_query_str(".unread").unwrap();
+        assert!(q.to_string().contains(".unread"), "got: {}", q);
+    }
+
+    #[test]
+    fn test_display_read_filter_read() {
+        let q = parse_query_str(".read").unwrap();
+        assert!(q.to_string().contains(".read"), "got: {}", q);
+    }
+
+    #[test]
+    fn test_display_read_filter_all() {
+        let q = parse_query_str(".all").unwrap();
+        assert!(q.to_string().contains(".all"), "got: {}", q);
+    }
+
+    #[test]
+    fn test_display_read_filter_any_omitted() {
+        // ReadFilter::Any is the default — it must NOT appear in the output.
+        let q = parse_query_str("/d").unwrap();
+        let s = q.to_string();
+        assert!(
+            !s.contains(".read") && !s.contains(".unread") && !s.contains(".all"),
+            "Any read-filter should be omitted, got: {s}"
+        );
+    }
+
+    // ── Query Display: grouping keys ─────────────────────────────────────────
+
+    #[rstest]
+    #[case("/d")]
+    #[case("/w")]
+    #[case("/f")]
+    fn test_display_single_group_key(#[case] input: &str) {
+        let q = parse_query_str(input).unwrap();
+        assert!(
+            q.to_string().contains(input),
+            "expected {input} in output, got: {}",
+            q
+        );
+    }
+
+    #[test]
+    fn test_display_multiple_group_keys() {
+        let q = parse_query_str("/d /f").unwrap();
+        let s = q.to_string();
+        assert!(s.contains("/d"), "expected /d in output, got: {s}");
+        assert!(s.contains("/f"), "expected /f in output, got: {s}");
+    }
+
+    // ── Query Display: feed filter ───────────────────────────────────────────
+
+    #[test]
+    fn test_display_feed_filter() {
+        let q = parse_query_str("@myblog").unwrap();
+        assert!(q.to_string().contains("@myblog"), "got: {}", q);
+    }
+
+    // ── Query Display: date ranges ───────────────────────────────────────────
+
+    #[test]
+    fn test_display_date_range_both() {
+        let q = parse_query_str("2024-01-15..2024-02-01").unwrap();
+        let s = q.to_string();
+        assert!(
+            s.contains("2024-01-15..2024-02-01"),
+            "expected full range in output, got: {s}"
+        );
+    }
+
+    #[test]
+    fn test_display_date_range_open_end() {
+        let q = parse_query_str("2024-01-15..").unwrap();
+        let s = q.to_string();
+        assert!(
+            s.contains("2024-01-15.."),
+            "expected open-ended since range in output, got: {s}"
+        );
+    }
+
+    #[test]
+    fn test_display_date_range_open_start() {
+        let q = parse_query_str("..2024-02-01").unwrap();
+        let s = q.to_string();
+        assert!(
+            s.contains("..2024-02-01"),
+            "expected open-start until range in output, got: {s}"
+        );
+    }
+
+    #[test]
+    fn test_display_relative_date_range_raw_text() {
+        // Relative dates must appear as their raw strings, not resolved timestamps.
+        let q = parse_query_str("90d..").unwrap();
+        let s = q.to_string();
+        assert!(
+            s.contains("90d.."),
+            "expected raw relative date in output, got: {s}"
+        );
+    }
+
+    // ── Query Display: round-trip ────────────────────────────────────────────
+
+    /// parse → display → parse must yield an equivalent query.
+    #[rstest]
+    #[case(".unread /w @hn")]
+    #[case(".read /d @myblog 2024-01-15..2024-02-01")]
+    #[case(".all /f")]
+    #[case("90d.. /w")]
+    #[case("..2024-06-01")]
+    fn test_display_round_trips(#[case] input: &str) {
+        let q1 = parse_query_str(input).expect("first parse should succeed");
+        let serialized = q1.to_string();
+        let q2 = parse_query_str(&serialized).expect("re-parse of Display output should succeed");
+
+        assert_eq!(q1.keys, q2.keys, "keys differ after round-trip");
+        assert_eq!(q1.filter, q2.filter, "filter differs after round-trip");
+        assert_eq!(
+            q1.read_filter, q2.read_filter,
+            "read_filter differs after round-trip"
+        );
+
+        // Date bounds: allow 60-second tolerance for relative dates.
+        match (q1.date_filter.since, q2.date_filter.since) {
+            (None, None) => {}
+            (Some(a), Some(b)) => {
+                let diff = (a.resolved - b.resolved).num_seconds().abs();
+                assert!(diff < 60, "since differs by {diff}s after round-trip");
+            }
+            _ => panic!("since presence changed after round-trip"),
+        }
+        match (q1.date_filter.until, q2.date_filter.until) {
+            (None, None) => {}
+            (Some(a), Some(b)) => {
+                let diff = (a.resolved - b.resolved).num_seconds().abs();
+                assert!(diff < 60, "until differs by {diff}s after round-trip");
+            }
+            _ => panic!("until presence changed after round-trip"),
+        }
     }
 }
