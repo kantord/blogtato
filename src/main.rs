@@ -140,6 +140,11 @@ enum FeedCommand {
         /// The feed URL to subscribe to
         urls: Vec<String>,
     },
+    /// Ingest RSS/Atom XML from stdin into a feed by name. Stored as stdin:<name>.
+    Ingest {
+        /// Stable feed name. Stored as stdin:<name>.
+        name: String,
+    },
     /// Unsubscribe from a feed by URL or @shorthand
     Rm {
         /// The feed URL or @shorthand to unsubscribe from
@@ -262,6 +267,19 @@ fn run() -> anyhow::Result<()> {
                 eprintln!("Added {resolved}");
             }
             eprintln!("Run `blog sync` to fetch posts.");
+        }
+        Some(Command::Feed {
+            command: FeedCommand::Ingest { ref name },
+        }) => {
+            reject_filter(&filter, "feed")?;
+            let mut bytes = Vec::new();
+            std::io::Read::read_to_end(&mut std::io::stdin().lock(), &mut bytes)?;
+            let ingest_filter = data::get_config_value(&store, "ingest_filter");
+            let added = store.transact(&format!("ingest feed: {name}"), |tx| {
+                commands::ingest::cmd_ingest(tx, name, &bytes, ingest_filter.as_deref())
+            })?;
+            eprintln!("Ingested {added}");
+            eprintln!("Run `blog sync` to sync this feed to your other devices.");
         }
         Some(Command::Feed {
             command: FeedCommand::Rm { ref urls },

@@ -1,3 +1,5 @@
+use std::cmp::Reverse;
+
 use chrono::{DateTime, Utc};
 use indicatif::ProgressBar;
 use rayon::prelude::*;
@@ -14,8 +16,15 @@ const INITIAL_UNREAD_CAP: usize = 5;
 const FETCH_THREADS: usize = 48;
 
 /// Fetch all feeds in parallel.
+///
+/// `stdin:`-prefixed sources are ingest-only (populated via `blog feed
+/// ingest`) and have no URL to fetch, so they are skipped here.
 pub(crate) fn fetch_feeds(sources: &[FeedSource], pb: &ProgressBar) -> Vec<FetchResult> {
     let client = crate::utils::http::http_client();
+    let sources: Vec<&FeedSource> = sources
+        .iter()
+        .filter(|source| !source.url.starts_with("stdin:"))
+        .collect();
     pb.set_length(sources.len() as u64);
 
     let pool = rayon::ThreadPoolBuilder::new()
@@ -30,7 +39,7 @@ pub(crate) fn fetch_feeds(sources: &[FeedSource], pb: &ProgressBar) -> Vec<Fetch
                 pb.set_message(source.url.clone());
                 let result = crate::feed::fetch(&client, &source.url).map_err(|e| e.to_string());
                 pb.inc(1);
-                (source.clone(), result)
+                ((*source).clone(), result)
             })
             .collect()
     })
@@ -55,7 +64,7 @@ pub(crate) fn initial_read_ids(items: &[FeedItem], now: DateTime<Utc>) -> Vec<St
         .iter()
         .filter(|i| matches!(i.date, Some(d) if d >= two_months_ago))
         .collect();
-    recent.sort_by_key(|b| std::cmp::Reverse(b.date));
+    recent.sort_by_key(|item| Reverse(item.date));
 
     let unread_ids: std::collections::HashSet<&str> = if recent.is_empty() {
         // All posts are old or dateless — keep the single most recent unread
@@ -74,6 +83,59 @@ pub(crate) fn initial_read_ids(items: &[FeedItem], now: DateTime<Utc>) -> Vec<St
         .filter(|i| !unread_ids.contains(i.raw_id.as_str()))
         .map(|i| i.raw_id.clone())
         .collect()
+}
+
+pub(crate) fn apply_feed(
+    tx: &mut Transaction,
+    mut source: FeedSource,
+    meta: FeedMeta,
+    items: Vec<FeedItem>,
+) {
+    let feed_id = tx.feeds.id_of(&source);
+    let now = Utc::now();
+
+    if !source.is_fetched {
+        for id in initial_read_ids(&items, now) {
+            tx.reads.upsert(ReadMark {
+                post_id: id,
+                read_at: now,
+            });
+        }
+    }
+
+    for mut item in items {
+        item.feed = feed_id.clone();
+        tx.posts.upsert(item);
+    }
+
+    source.is_fetched = true;
+    source.title = meta.title;
+    source.site_url = meta.site_url;
+    source.description = meta.description;
+    tx.feeds.upsert(source);
+}
+
+/// Apply fetched feed results to the store.
+///
+/// If `ingest_filter` is set and jq fails, the entire sync is aborted rather
+/// than skipping the feed. This is intentional: a broken filter would silently
+/// drop all posts from every feed if we continued.
+pub(crate) fn apply_fetched(
+    tx: &mut Transaction,
+    results: Vec<FetchResult>,
+    pb: &ProgressBar,
+    ingest_filter: Option<&str>,
+) -> anyhow::Result<()> {
+    for (source, result) in results {
+        match result {
+            Ok((meta, items)) => {
+                let items = crate::utils::jq::map_through_jq(items, ingest_filter)?;
+                apply_feed(tx, source, meta, items);
+            }
+            Err(e) => pb.suspend(|| eprintln!("Error fetching {}: {}", source.url, e)),
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -130,52 +192,4 @@ mod tests {
             "ages={ages:?}: expected {expected_unread} unread, got {unread_count} (read_ids={read_ids:?})"
         );
     }
-}
-
-fn apply_feed(tx: &mut Transaction, mut source: FeedSource, meta: FeedMeta, items: Vec<FeedItem>) {
-    let feed_id = tx.feeds.id_of(&source);
-    let now = Utc::now();
-
-    if !source.is_fetched {
-        for id in initial_read_ids(&items, now) {
-            tx.reads.upsert(ReadMark {
-                post_id: id,
-                read_at: now,
-            });
-        }
-    }
-
-    for mut item in items {
-        item.feed = feed_id.clone();
-        tx.posts.upsert(item);
-    }
-
-    source.is_fetched = true;
-    source.title = meta.title;
-    source.site_url = meta.site_url;
-    source.description = meta.description;
-    tx.feeds.upsert(source);
-}
-
-/// Apply fetched feed results to the store.
-///
-/// If `ingest_filter` is set and jq fails, the entire sync is aborted rather
-/// than skipping the feed. This is intentional: a broken filter would silently
-/// drop all posts from every feed if we continued.
-pub(crate) fn apply_fetched(
-    tx: &mut Transaction,
-    results: Vec<FetchResult>,
-    pb: &ProgressBar,
-    ingest_filter: Option<&str>,
-) -> anyhow::Result<()> {
-    for (source, result) in results {
-        match result {
-            Ok((meta, items)) => {
-                let items = crate::utils::jq::map_through_jq(items, ingest_filter)?;
-                apply_feed(tx, source, meta, items);
-            }
-            Err(e) => pb.suspend(|| eprintln!("Error fetching {}: {}", source.url, e)),
-        }
-    }
-    Ok(())
 }
