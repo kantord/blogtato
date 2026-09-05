@@ -2,7 +2,12 @@ use crate::data::Transaction;
 use crate::data::schema::FeedSource;
 use crate::feed::pull::apply_feed;
 
-pub(crate) fn cmd_ingest(tx: &mut Transaction, name: &str, bytes: &[u8]) -> anyhow::Result<String> {
+pub(crate) fn cmd_ingest(
+    tx: &mut Transaction,
+    name: &str,
+    bytes: &[u8],
+    ingest_filter: Option<&str>,
+) -> anyhow::Result<String> {
     anyhow::ensure!(!name.is_empty(), "feed name cannot be empty");
     anyhow::ensure!(
         !name.starts_with("stdin:"),
@@ -16,6 +21,7 @@ pub(crate) fn cmd_ingest(tx: &mut Transaction, name: &str, bytes: &[u8]) -> anyh
 
     let url = format!("stdin:{name}");
     let (meta, items) = crate::feed::parse(bytes)?;
+    let items = crate::utils::jq::map_through_jq(items, ingest_filter)?;
 
     let source = tx.feeds.get(&url).cloned().unwrap_or_else(|| FeedSource {
         url: url.clone(),

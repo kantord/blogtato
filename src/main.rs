@@ -274,10 +274,12 @@ fn run() -> anyhow::Result<()> {
             reject_filter(&filter, "feed")?;
             let mut bytes = Vec::new();
             std::io::Read::read_to_end(&mut std::io::stdin().lock(), &mut bytes)?;
+            let ingest_filter = data::get_config_value(&store, "ingest_filter");
             let added = store.transact(&format!("ingest feed: {name}"), |tx| {
-                commands::ingest::cmd_ingest(tx, name, &bytes)
+                commands::ingest::cmd_ingest(tx, name, &bytes, ingest_filter.as_deref())
             })?;
             eprintln!("Ingested {added}");
+            eprintln!("Run `blog sync` to sync this feed to your other devices.");
         }
         Some(Command::Feed {
             command: FeedCommand::Rm { ref urls },

@@ -262,9 +262,10 @@ blog config unset default_query
 ### Ingest filter
 
 You can configure a [jq](https://jqlang.github.io/jq/) expression that
-transforms posts during `blog sync`, before they are stored. This lets you
-filter out unwanted content or rewrite fields. The expression receives an array
-of post objects and must return an array.
+transforms posts before they are stored, whether they arrive via `blog sync`
+or `blog feed ingest`. This lets you filter out unwanted content or rewrite
+fields. The expression receives an array of post objects and must return an
+array.
 
 `blogtato` calls [jq](https://jqlang.github.io/jq/) as an external process. It
 is not bundled with `blogtato`
