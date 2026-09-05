@@ -704,6 +704,27 @@ fn test_ingest_creates_feed_and_posts() {
     assert!(feeds[0]["is_fetched"].as_bool().unwrap());
 }
 
+#[rstest]
+#[case::empty_name("", "feed name cannot be empty")]
+#[case::stdin_prefix("stdin:foo", "should not include the stdin: prefix")]
+#[case::invalid_chars(
+    "foo bar",
+    "may only contain letters, numbers, dots, dashes, and underscores"
+)]
+fn test_ingest_rejects_invalid_names(#[case] name: &str, #[case] expected_err: &str) {
+    let ctx = TestContext::new();
+
+    let err = ctx
+        .run_with_stdin(&["feed", "ingest", name], "")
+        .failure()
+        .stderr_str();
+    assert!(
+        err.contains(expected_err),
+        "expected error containing {expected_err:?}, got: {err}"
+    );
+    assert!(ctx.read_feeds().is_empty());
+}
+
 #[test]
 fn test_ingest_twice_updates_same_feed_without_duplicating() {
     let ctx = TestContext::new();
