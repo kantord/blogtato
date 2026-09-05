@@ -64,9 +64,9 @@ python /path/to/rss-scrapers/hn-updates.py | blog feed ingest hn-updates
 
 `blog feed ingest <name>` reads RSS or Atom XML from stdin and stores the
 resulting posts under a feed named `stdin:<name>`. Re-running it (from a cron
-job, a systemd timer, a GitHub Action, or manually) updates that same feed
-in place — nothing is executed automatically during `blog sync`, so this
-works entirely on your terms and with any tool you like.
+job, a systemd timer, a GitHub Action, or manually) updates that same feed in
+place — nothing is executed automatically during `blog sync`, so this works
+entirely on your terms and with any tool you like.
 
 ```json
 {
@@ -87,8 +87,8 @@ composes with anything:
   has the latest scraped data
 - [rsspls](https://rsspls.7bit.org/documentation/) or any other scraper that
   emits RSS/Atom, piped straight into `blog feed ingest`
-- Different scrapers running on different machines, all ingesting into the
-  same synced store
+- Different scrapers running on different machines, all ingesting into the same
+  synced store
 
 You can import your subscriptions from other RSS readers
 ([Feedly](https://docs.feedly.com/article/52-how-can-i-export-my-sources-and-feeds-through-opml),
@@ -105,9 +105,9 @@ blog feed import feeds.opml
 ```
 
 `stdin:`-prefixed feeds from `blog feed ingest` are exported to OPML for
-reference, but cannot be imported back — an OPML entry has no way to carry
-the scraper command, so `blog feed import` rejects them with an error. Ingest
-those feeds directly instead.
+reference, but cannot be imported back — an OPML entry has no way to carry the
+scraper command, so `blog feed import` rejects them with an error. Ingest those
+feeds directly instead.
 
 Fetch and list latest posts:
 
@@ -262,8 +262,8 @@ blog config unset default_query
 ### Ingest filter
 
 You can configure a [jq](https://jqlang.github.io/jq/) expression that
-transforms posts before they are stored, whether they arrive via `blog sync`
-or `blog feed ingest`. This lets you filter out unwanted content or rewrite
+transforms posts before they are stored, whether they arrive via `blog sync` or
+`blog feed ingest`. This lets you filter out unwanted content or rewrite
 fields. The expression receives an array of post objects and must return an
 array.
 
