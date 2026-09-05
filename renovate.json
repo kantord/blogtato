@@ -6,9 +6,9 @@
     ":pinDependencies",
     ":semanticCommits"
   ],
-  "minimumReleaseAge": "3 days",
+  "minimumReleaseAge": "5 days",
   "vulnerabilityAlerts": {
-    "minimumReleaseAge": null,
+    "minimumReleaseAge": "3 days",
     "labels": ["security"]
   },
   "lockFileMaintenance": {

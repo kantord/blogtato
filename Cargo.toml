@@ -11,6 +11,9 @@ repository = "https://github.com/kantord/blogtato"
 name = "blog"
 path = "src/main.rs"
 
+[lints.rust]
+unsafe_code = "forbid"
+
 [dependencies]
 synctato = "=0.1.13"
 anyhow = "=1.0.102"
