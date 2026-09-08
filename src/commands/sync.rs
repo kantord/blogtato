@@ -7,7 +7,7 @@ use synctato::{SyncEvent, SyncResult};
 use crate::data::BlogData;
 use crate::data::index::{FeedIndex, feed_index};
 use crate::data::schema::FeedSource;
-use crate::utils::progress::spinner;
+use crate::utils::progress::{spinner, static_spinner};
 use crate::utils::version_check::check_for_newer_version;
 
 use crate::feed::pull::{apply_fetched, fetch_feeds};
@@ -21,7 +21,9 @@ fn do_sync_remote(store: &mut BlogData) -> anyhow::Result<SyncResult> {
     let mut sp: Option<ProgressBar> = None;
     store.sync_remote(|event| match event {
         SyncEvent::Fetching => {
-            sp = Some(spinner("Fetching..."));
+            // Non-animated: `git fetch` over ssh may need to prompt for a key
+            // passphrase, and a steady-tick spinner would redraw over it.
+            sp = Some(static_spinner("Fetching..."));
         }
         SyncEvent::FetchDone => {
             if let Some(s) = sp.take() {
@@ -34,7 +36,8 @@ fn do_sync_remote(store: &mut BlogData) -> anyhow::Result<SyncResult> {
             } else {
                 "Pushing..."
             };
-            sp = Some(spinner(msg));
+            // Same reasoning as Fetching: `git push` over ssh may prompt too.
+            sp = Some(static_spinner(msg));
         }
         SyncEvent::PushDone { first_push } => {
             let msg = if first_push {
