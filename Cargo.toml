@@ -20,11 +20,11 @@ anyhow = "=1.0.104"
 atom_syndication = "=0.12.10"
 clap = { version = "=4.6.6", features = ["derive"] }
 chrono = { version = "=0.4.45", features = ["serde"] }
-ureq = "=3.4.0"
+ureq = "=3.4.1"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 itertools = "=0.15.0"
-rss = "=2.1.0"
+rss = "=2.1.1"
 url = "=2.5.8"
 dirs = "=7.0.0"
 indicatif = "=0.18.6"
