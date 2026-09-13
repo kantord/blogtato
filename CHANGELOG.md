@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.27](https://github.com/kantord/blogtato/compare/v0.1.26...v0.1.27) - 2026-09-13
+
+### Fixed
+
+- *(deps)* update patch updates ([#238](https://github.com/kantord/blogtato/pull/238))
+- *(deps)* update rust crate dirs to v7 ([#239](https://github.com/kantord/blogtato/pull/239))
+- stop fetch/push spinner from clobbering ssh passphrase prompt ([#217](https://github.com/kantord/blogtato/pull/217)) ([#236](https://github.com/kantord/blogtato/pull/236))
+
+### Other
+
+- *(deps)* update rust crate rstest to v0.27.0 ([#240](https://github.com/kantord/blogtato/pull/240))
+
 ## [0.1.26](https://github.com/kantord/blogtato/compare/v0.1.25...v0.1.26) - 2026-09-05
 
 ### Added
