@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.28](https://github.com/kantord/blogtato/compare/v0.1.27...v0.1.28) - 2026-10-30
+
+### Fixed
+
+- *(deps)* update rust crate ureq to v3.5.0 ([#245](https://github.com/kantord/blogtato/pull/245))
+
+### Other
+
+- *(deps)* update rust crate httpmock to v0.9.0 ([#244](https://github.com/kantord/blogtato/pull/244))
+- *(deps)* lock file maintenance ([#227](https://github.com/kantord/blogtato/pull/227))
+- *(deps)* update github actions ([#242](https://github.com/kantord/blogtato/pull/242))
+
 ## [0.1.27](https://github.com/kantord/blogtato/compare/v0.1.26...v0.1.27) - 2026-09-13
 
 ### Fixed
