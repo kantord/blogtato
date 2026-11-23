@@ -3,7 +3,6 @@ version = 2
 yanked = "deny"
 ignore = [
   { id = "RUSTSEC-2024-0436", reason = "paste is unmaintained but pulled in transitively via synctato; not fixable from this repo" },
-  { id = "RUSTSEC-2026-0190", reason = "anyhow unsound downcast_mut; fix requires synctato to unpin its own anyhow = \"=1.0.102\" first, blogtato can't bump alone" },
 ]
 
 [bans]
